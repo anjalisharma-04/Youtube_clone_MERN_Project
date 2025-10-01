@@ -2,7 +2,7 @@
 
 import { newUser } from "../models/userModel.js";
 import { Video } from "../models/videoModel.js";
-import { Comment } from "../models/commentModels.js";   // ✅ FIXED
+import Comment from "../models/commentModels.js";   
 import { Channel } from "../models/channelModel.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
@@ -15,8 +15,8 @@ const generateAccessToken = async (userId) => {
   if (!user) {
     throw new ApiError(404, "User not found for token generation");
   }
-  const accessToken = user.generateAccessToken();
-  await user.save({ validateBeforeSave: false });
+
+  const accessToken = user.generateAccessToken(); // Assumes method exists on schema
   return { accessToken };
 };
 
@@ -76,7 +76,7 @@ export const login = asyncHandler(async (req, res) => {
     .status(200)
     .cookie("accessToken", accessToken, {
       httpOnly: true,
-      secure: true,
+      secure: process.env.NODE_ENV === "production",
     })
     .json(new ApiResponse(200, { user: safeUser, accessToken }, "Login successful"));
 });
@@ -85,7 +85,7 @@ export const login = asyncHandler(async (req, res) => {
 export const logoutUser = asyncHandler(async (req, res) => {
   return res
     .status(200)
-    .clearCookie("accessToken", { httpOnly: true, secure: true })
+    .clearCookie("accessToken", { httpOnly: true, secure: process.env.NODE_ENV === "production" })
     .json(new ApiResponse(200, {}, "Logout successful"));
 });
 
@@ -93,20 +93,24 @@ export const logoutUser = asyncHandler(async (req, res) => {
 export const updateAccount = asyncHandler(async (req, res) => {
   const { name, email, password } = req.body;
 
-  if (!name || !email || !password) {
-    throw new ApiError(400, "All fields are required");
+  if (!name && !email && !password && !req.file) {
+    throw new ApiError(400, "At least one field must be provided for update");
   }
 
   let avatarUrl;
   if (req.file) {
-    const uploaded = await uploadOnCloudinary(req.file.path);
-    avatarUrl = uploaded.url;
+    try {
+      const uploaded = await uploadOnCloudinary(req.file.path);
+      avatarUrl = uploaded.url;
+    } catch (err) {
+      throw new ApiError(500, "Avatar upload failed");
+    }
   }
 
   const updates = {
-    name,
-    email,
-    password,
+    ...(name && { name }),
+    ...(email && { email }),
+    ...(password && { password }), // Make sure schema hashes it
     ...(avatarUrl && { avatar: avatarUrl }),
   };
 
@@ -114,6 +118,10 @@ export const updateAccount = asyncHandler(async (req, res) => {
     new: true,
     runValidators: true,
   });
+
+  if (!updated) {
+    throw new ApiError(404, "User not found");
+  }
 
   return res
     .status(200)
@@ -137,6 +145,7 @@ export const deleteAccount = asyncHandler(async (req, res) => {
     throw new ApiError(404, "User not found");
   }
 
+  // Delete user's channel and related data
   if (user.channelId) {
     const channelId = user.channelId;
     const videos = await Video.find({ channelId });
@@ -159,6 +168,7 @@ export const deleteAccount = asyncHandler(async (req, res) => {
     await Channel.findByIdAndDelete(channelId);
   }
 
+  // Remove user from subscribed channels
   if (user.subscriptions?.length > 0) {
     await Channel.updateMany(
       { _id: { $in: user.subscriptions } },
@@ -166,14 +176,17 @@ export const deleteAccount = asyncHandler(async (req, res) => {
     );
   }
 
+  // Delete user's videos and comments
   await Video.deleteMany({ owner: user._id });
   await Comment.deleteMany({ userId: user._id });
 
+  // Remove likes from other videos
   await Video.updateMany(
     { likes: user._id },
     { $pull: { likes: user._id } }
   );
 
+  // Finally, delete user
   await user.deleteOne();
 
   return res
