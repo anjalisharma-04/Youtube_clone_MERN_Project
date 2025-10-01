@@ -1,6 +1,8 @@
 // backend/models/commentModels.js
 
-import { Comment } from '../models/commentModels.js'; // ✅ correct
+import mongoose from "mongoose";
+
+const { Schema } = mongoose;
 
 // Define the schema for storing video comments
 const commentSchema = new Schema(
@@ -15,7 +17,7 @@ const commentSchema = new Schema(
     },
     userId: {
       type: Schema.Types.ObjectId,
-      ref: "newUser", // make sure this matches your actual user model name
+      ref: "newUser", // ensure your actual user model name matches
       required: true,
     },
     userAvatar: {
@@ -32,4 +34,5 @@ const commentSchema = new Schema(
   }
 );
 
-export const Comment = mongoose.models.Comment || mongoose.model("Comment", commentSchema);
+export const Comment =
+  mongoose.models.Comment || mongoose.model("Comment", commentSchema);
