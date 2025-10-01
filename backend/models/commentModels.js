@@ -1,6 +1,6 @@
 // backend/models/commentModels.js
 
-import mongoose, { Schema } from "mongoose";
+import { Comment } from '../models/commentModels.js'; // ✅ correct
 
 // Define the schema for storing video comments
 const commentSchema = new Schema(
@@ -32,4 +32,4 @@ const commentSchema = new Schema(
   }
 );
 
-import { Comment } from '../models/commentModels.js'; // ✅ correct
+export const Comment = mongoose.models.Comment || mongoose.model("Comment", commentSchema);
