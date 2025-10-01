@@ -32,5 +32,4 @@ const commentSchema = new Schema(
   }
 );
 
-// ✅ Use existing model if already defined to avoid OverwriteModelError
-export const Comment = mongoose.models.Comment || mongoose.model("Comment", commentSchema);
+import { Comment } from '../models/commentModels.js'; // ✅ correct
