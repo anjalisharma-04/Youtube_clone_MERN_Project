@@ -45,6 +45,11 @@ app.use("/api/v1/channel",channelRouter)
 app.use('/api/v1/comments', commentsRouter);
 app.use('/api/v1/tags', tagsRouter);
 
+//Root route 
+app.get("/",(req,res => {
+    res.send("Backend is running...");
+});
+
 // Start the server after connecting to the database
 connectDB()
     .then(() => {
